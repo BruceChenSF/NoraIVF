@@ -222,14 +222,4 @@ python plots/plot_qps_recall_with_l0.py \
 
 ## Citation
 
-If you use this code in your research, please cite:
-
-```bibtex
-@article{chen2026noraivf,
-  title={NoraIVF: A Memory-Native Dynamic IVF Index for Streaming Vector Search},
-  author={Chen, Bruce and others},
-  journal={Proceedings of the ACM on Management of Data},
-  year={2026},
-  note={To appear in SIGMOD 2026}
-}
-```
+TBD (manuscript under review).
