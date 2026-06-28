@@ -1,0 +1,15 @@
+# Core dependencies (required for all experiments)
+numpy>=1.24
+faiss-cpu>=1.7.4
+matplotlib>=3.7
+seaborn>=0.12
+scipy>=1.10
+tqdm>=4.65
+h5py>=3.10
+
+# Data preparation (only needed if re-downloading/preparing datasets)
+torch>=2.0
+torchvision>=0.15
+Pillow>=9.0
+huggingface-hub>=0.16
+pyarrow>=12.0
