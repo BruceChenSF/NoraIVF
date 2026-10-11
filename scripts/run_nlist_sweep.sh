@@ -14,7 +14,7 @@
 # Job control: 3 slots.  sift trio starts first; audioset tasks launch as slots free.
 # The script itself is meant to be run detached:
 #   setsid nohup bash scripts/run_nlist_sweep.sh > results/exp_nlist_master.log 2>&1 &
-cd /home/csf/projects/NoraIVF || exit 1
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 
 PY=.venv/bin/python
 RUN=experiments/run_claim_evidence_annbench.py

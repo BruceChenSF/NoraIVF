@@ -1,17 +1,21 @@
-"""量测 SCDKM 三种 CDKM 扫描宽度在 1M 尺度上的每分裂成本。
+"""Per-split cost of the four CDKM candidate-set widths, measured on SIFT-1M.
 
-动机：论文 §4 的 Algorithm 2 说 `q = arg max_l phi(i,l)`（对全部 k 个簇），
-而 core.py 的 `_cdkm_iterate` 只扫 [c1, c2]。把实现改成与论文一致之前，
-必须先知道这个改动的代价 —— 否则"重跑实验"可能跑出一个自我否定的结论。
+Motivation: Algorithm 2 in the paper writes ``q = arg max_l phi(i,l)`` over all k
+clusters, while ``_cdkm_iterate`` in core.py scans only ``[c1, c2]``.  Before
+changing the implementation to match the paper, the cost of that change has to be
+measured -- otherwise the re-run may produce a conclusion that refutes the claim
+the paper is built on.
 
-三种模式：
-  restricted : for c in [c1, c2]                （core.py 现状）
-  topl       : 两个分裂簇 + 分裂分区最近的 L 个质心（论文 §4 提的降本方案）
-  fullk      : for c in range(k)                （Algorithm 2 的字面实现，Python 逐簇循环）
-  fullk_vec  : 同上，但用一次 BLAS matvec 向量化（语义完全相同，只是快）
+Modes:
+  restricted : ``for c in [c1, c2]``            what core.py does today
+  topl       : the two split clusters plus the L nearest centroids of the split
+               partition                          the cheaper option the paper raises
+  fullk      : ``for c in range(k)``            Algorithm 2 taken literally, one
+                                                Python loop over all k clusters
+  fullk_vec  : identical semantics, evaluated as a single BLAS matvec
 
-另外做一次 restricted vs fullk 的**行为一致性**检查（逐簇比对），
-以及 fullk 与 fullk_vec 的**结果等价**检查。
+Also checks that restricted and fullk agree cluster by cluster wherever their
+candidate sets coincide, and that fullk and fullk_vec give equal results.
 """
 from __future__ import annotations
 import os, sys, time, json
@@ -20,7 +24,10 @@ from collections import defaultdict
 import numpy as np
 
 sys.path.insert(0, os.getcwd())
-sys.path.insert(0, "/home/csf/projects/NoraIVF")
+# Repo root, wherever this file is run from: experiments/ sits one level below
+# it, and NORAIVF_REPO_ROOT overrides the guess.
+sys.path.insert(0, os.environ.get("NORAIVF_REPO_ROOT")
+                or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import noraivf.core as core
 import noraivf.lean as lean
@@ -38,7 +45,7 @@ print(f"# data {train.shape}, n_init={N_INIT}, nlist={NLIST}, forced_splits={N_S
       flush=True)
 
 
-# ── 向量化的 full-k（语义 = Algorithm 2） ────────────────────────
+# ---- vectorized full-k (same semantics as Algorithm 2) --------------------────────
 def _cdkm_iterate_vec(self, c1, c2, candidate_indices, n_iter=5):
     k = self.k
     n = self.n_j[:k].astype(np.float64)
@@ -52,7 +59,7 @@ def _cdkm_iterate_vec(self, c1, c2, candidate_indices, n_iter=5):
             p = self.ppm[idx]
             vec = self.id_to_vec[idx]
             rho = float(np.dot(vec, vec))
-            dots = a @ vec                                   # (k,) 一次 BLAS matvec
+            dots = a @ vec                              # (k,) in one BLAS matvec
             s_aug = s + 2.0 * dots + rho
             with np.errstate(divide="ignore", invalid="ignore"):
                 phi = s_aug / (n + 1.0) - np.where(n > 0, s / np.maximum(n, 1.0), 0.0)
@@ -62,7 +69,7 @@ def _cdkm_iterate_vec(self, c1, c2, candidate_indices, n_iter=5):
             best = int(np.argmax(phi))
             if best != p:
                 self._move_vector(idx, p, best, vec)
-                # 统计量变了，重算 n/s
+                # the statistics moved, so refresh n and s
                 n = self.n_j[:k].astype(np.float64)
                 s = self.s_j[:k].astype(np.float64)
                 changed = True
@@ -70,7 +77,7 @@ def _cdkm_iterate_vec(self, c1, c2, candidate_indices, n_iter=5):
             break
 
 
-# ── 打补丁的 L2 NoveIVF 类，支持四种模式 ─────────────────────────
+# ---- patched L2 NovaIVF class carrying the four scan modes ----------------──────────
 from experiments.run_billion_probe import ProbeNovaIVF
 
 
@@ -139,28 +146,30 @@ for mode in ("restricted", "topl", "fullk", "fullk_vec"):
     if mode == "fullk":
         fk_parts = [sorted(pl) for pl in idx.posting_lists[:idx.k]]
         same = ref_parts is not None and fk_parts == ref_parts
-        print(f"#   行为一致性 restricted vs fullk: "
-              f"{'相同' if same else '不同（预期，因为候选集不同）'}", flush=True)
+        print(f"#   restricted vs fullk agreement: "
+              f"{'identical' if same else 'differ (expected: candidate sets differ)'}",
+              flush=True)
         out["restricted_eq_fullk"] = bool(same)
     if mode == "fullk_vec":
         vp = [sorted(pl) for pl in idx.posting_lists[:idx.k]]
-        # fullk_vec 的对照要在同一模式下重跑 fullk 才能逐簇比；这里只报耗时比
+        # comparing fullk_vec cluster by cluster would need a second fullk run
+        # in the same mode; report the time ratio here
         out["vec_speedup_vs_fullk"] = out["fullk"]["per_split_median_s"] / max(med, 1e-9)
-        print(f"#   fullk_vec 相对 fullk 加速: "
+        print(f"#   fullk_vec speedup over fullk: "
               f"{out['vec_speedup_vs_fullk']:.1f}x", flush=True)
     del idx
 
-# 参考：SPFresh 的每分裂成本
+# reference: SPFresh per-split cost, from its measured maintenance run
 out["_ref_spfresh_per_split_s"] = 1493.1576543934643 / 1661
 out["_ref_novaivf_per_split_s"] = 14.804206147789955 / 1795
-print(f"# 参考 SPFresh 每分裂 = {out['_ref_spfresh_per_split_s']:.4f}s  "
-      f"(来自 results/claim_evidence_sift.json)", flush=True)
-print(f"# 参考 NovaIVF(restricted) 每分裂 = {out['_ref_novaivf_per_split_s']:.6f}s",
+print(f"# reference SPFresh per split = {out['_ref_spfresh_per_split_s']:.4f}s  "
+      f"(from results/claim_evidence_sift.json)", flush=True)
+print(f"# reference NovaIVF(restricted) per split = {out['_ref_novaivf_per_split_s']:.6f}s",
       flush=True)
 for m in ("restricted", "topl", "fullk", "fullk_vec"):
     r = out[m]["per_split_median_s"] / out["_ref_spfresh_per_split_s"]
-    print(f"#   {m:12s} 相对 SPFresh = {r:8.3f}x  "
-          f"({'NoraIVF 更慢' if r > 1 else 'NoraIVF 更快'})", flush=True)
+    print(f"#   {m:12s} vs SPFresh = {r:8.3f}x  "
+          f"{'NoraIVF slower' if r > 1 else 'NoraIVF faster'}", flush=True)
 
 json.dump(out, open("results/scdkm_scan_width_1m.json", "w"), indent=2)
 print("# saved results/scdkm_scan_width_1m.json", flush=True)

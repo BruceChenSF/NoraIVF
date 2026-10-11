@@ -2,7 +2,7 @@
 """Data pipeline: convert AudioSet v1 audio embeddings (TFRecord) into the
 canonical NoraIVF dataset directory ``data/annbench/audioset-128-euclidean/``.
 
-Source: /ssd1/csf/datasets/audioset/audioset_v1_embeddings/bal_train/*.tfrecord
+Source: <audioset>/audioset_v1_embeddings/bal_train/*.tfrecord
 (pure TFRecord container, no tensorflow dependency).
 
 Pipeline (per segment):
@@ -43,7 +43,7 @@ NOTE on the actual data format (verified against the bytes):
 Usage::
 
     python scripts/prepare_audioset.py \
-        --source-dir /ssd1/csf/datasets/audioset/audioset_v1_embeddings/bal_train \
+        --source-dir /path/to/audioset_v1_embeddings/bal_train \
         --out-dir data/annbench/audioset-128-euclidean \
         --n-queries 1000 --seed 42 --gt-k 100
 

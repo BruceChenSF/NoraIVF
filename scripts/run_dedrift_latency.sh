@@ -1,7 +1,8 @@
 #!/bin/bash
-# run_dedrift_latency.sh - 补跑 DeDrift 的延迟实验（修正 --dataset 单数参数）
-# 参数对齐既有 latency_scale/*_raw.json：DEEP 用 200k 测量窗口
-cd /home/csf/projects/NoraIVF || exit 1
+# run_dedrift_latency.sh - re-run the DeDrift latency experiment, fixing the
+# singular --dataset argument used earlier
+# Parameters aligned with the existing latency_scale/*_raw.json: DEEP uses a 200k window
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 LAT=experiments/run_latency_scale.py
 LOUT=results/latency_scale_dedrift

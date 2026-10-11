@@ -1,9 +1,10 @@
 #!/bin/bash
 # run_dedrift_ms_fix.sh
-# 修正 DeDrift 多 seed 补跑：原脚本漏了 --nlist，MNIST/Fashion/GIST 误用默认 4096。
-# 正确工作点：MNIST 512、Fashion 512、GIST 1024（与主实验 Table 4 一致）。
-# 重跑前先把错误的旧文件备份到 _bad_nlist4096/。
-cd /home/csf/projects/NoraIVF || exit 1
+# Fix the DeDrift multi-seed re-run: the original script omitted --nlist, so
+# MNIST/Fashion/GIST silently used the default of 4096.
+# Correct operating points: MNIST 512, Fashion 512, GIST 1024 (as in the paper).
+# The wrong files are moved to _bad_nlist4096/ before re-running.
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 MS=experiments/run_claim_evidence_annbench.py
 OUT=results/multiseed_dedrift

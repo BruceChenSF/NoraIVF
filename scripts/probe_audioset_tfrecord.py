@@ -6,7 +6,7 @@ shape/count), CRC checks, and per-shard totals.
 
 Usage::
 
-    python scripts/probe_audioset_tfrecord.py /ssd1/csf/datasets/audioset/audioset_v1_embeddings/bal_train/00.tfrecord
+    python scripts/probe_audioset_tfrecord.py /path/to/bal_train/00.tfrecord
 """
 
 import sys
@@ -23,8 +23,9 @@ from prepare_audioset import (  # noqa: E402
 
 
 def main() -> None:
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else
-                "/ssd1/csf/datasets/audioset/audioset_v1_embeddings/bal_train/00.tfrecord")
+    if len(sys.argv) < 2:
+        raise SystemExit("usage: probe_audioset_tfrecord.py <file.tfrecord>")
+    path = Path(sys.argv[1])
     print(f"probe: {path} ({path.stat().st_size} bytes)")
 
     n_records = 0

@@ -1,7 +1,7 @@
 #!/bin/bash
 # NoraIVF rebuttal experiment orchestrator (chained batches)
 # J6/J7 after small batch finishes; J3/J4 after audioset-unbal conversion finishes.
-cd /home/csf/projects/NoraIVF
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 RUN="experiments/run_claim_evidence_annbench.py"
 LEAN_METHODS="Frozen DeDrift SPFresh NovaIVF AdaIVF"

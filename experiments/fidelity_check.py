@@ -17,7 +17,10 @@ import os, sys, time, json
 import numpy as np
 
 sys.path.insert(0, os.getcwd())
-sys.path.insert(0, "/home/csf/projects/NoraIVF")
+# Repo root, wherever this file is run from: experiments/ sits one level below
+# it, and NORAIVF_REPO_ROOT overrides the guess.
+sys.path.insert(0, os.environ.get("NORAIVF_REPO_ROOT")
+                or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import noraivf.core as core
 import noraivf.lean as lean

@@ -76,7 +76,7 @@ ROWS = [
     ("query_us", "Query"),
 ]
 
-# DeDrift latency补跑 lives in a sibling directory and uses the full dataset
+# the DeDrift latency run lives in a sibling directory and uses the full dataset
 # name rather than the shorter ``latency_scale`` raw stem.
 DEDRIFT_DIR = _ROOT / "results" / "latency_scale_dedrift"
 DEDRIFT_STEM = {

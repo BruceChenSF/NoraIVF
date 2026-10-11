@@ -20,11 +20,14 @@ from collections import defaultdict
 
 import numpy as np
 
-# The harness is launched from the project root (cwd); the file itself may live
-# anywhere (it is copied to /home/csf/tmpbg before running), so anchor imports
-# on the cwd rather than on __file__.
+# The harness is launched from the project root (cwd), and the file itself may be
+# run from a copy elsewhere, so anchor imports on the cwd as well as on the repo
+# root that __file__ implies.
 sys.path.insert(0, os.getcwd())
-sys.path.insert(0, "/home/csf/projects/NoraIVF")
+# Repo root, wherever this file is run from: experiments/ sits one level below
+# it, and NORAIVF_REPO_ROOT overrides the guess.
+sys.path.insert(0, os.environ.get("NORAIVF_REPO_ROOT")
+                or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import noraivf.core as core                     # noqa: E402
 from noraivf.lean import (Bootstrap, VecStore, assign_all,  # noqa: E402

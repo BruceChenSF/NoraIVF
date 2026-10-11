@@ -1,14 +1,17 @@
 #!/bin/bash
-# run_nlist_sweep_full.sh - 全数据集 nlist 扫描（补跑，含 AdaIVF 与 DeDrift）
+# run_nlist_sweep_full.sh - nlist sweep over every dataset (backfill run,
+# including AdaIVF and DeDrift)
 #
-# 设计：每个数据集在"工作点 nlist"(op) 及 op/4, op/2, op*2 各跑一次全量覆盖流；
-#       op 那一列直接取主实验结果（已有，不重跑）。
+# Design: each dataset runs one full-coverage stream at its operating-point nlist
+# (op) and at op/4, op/2 and op*2;
+#       the op column is taken from the main experiment, so it is not re-run.
 #   MNIST/Fashion (op=512) : 128 / 256 / (512 from main) / 1024
 #   GIST-500k     (op=1024): 256 / 512 / (1024)            / 2048
 #   SIFT/GloVe/AudioSet/DEEP (op=4096): 1024 / 2048 / (4096) / 8192
-# 方法：Frozen DeDrift SPFresh NovaIVF AdaIVF（Rebuild 成本过高，与主实验一致地省略）
-# 目的：为论文 6.2.6 提供"全数据集覆盖的表格 + 两幅代表性面板"
-cd /home/csf/projects/NoraIVF || exit 1
+# Methods: Frozen DeDrift SPFresh NovaIVF AdaIVF (Rebuild is too expensive and is
+# omitted, as in the main experiment)
+# Purpose: the all-dataset table and the two representative panels for Section 6.2.6
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 
 PY=.venv/bin/python
 RUN=experiments/run_claim_evidence_annbench.py
@@ -21,7 +24,7 @@ SLOTS=${SLOTS:-6}
 METHODS="Frozen DeDrift SPFresh NovaIVF AdaIVF"
 EXTRA="--checkpoint-every 1 --log-dir results/logs --skip-lire-sweep --gt-scope full"
 
-# tag|dataset|n_init|n_stream|nlist   （DEEP 排最前，长任务先占槽）
+# tag|dataset|n_init|n_stream|nlist   (DEEP first so the longest job takes a slot early)
 TASKS=(
 "deep1024|deep-image-96-angular|4995000|4995000|1024"
 "deep2048|deep-image-96-angular|4995000|4995000|2048"

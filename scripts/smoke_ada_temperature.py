@@ -14,7 +14,7 @@ False) on a mixed streaming workload with a hotspot query schedule:
 GT is the vectorized brute force over the round's live vectors
 (one qs @ live.T matmul for all 20 queries); no per-query Python GT loop.
 
-调参注记 (tau_f x temperature scan, SIFT-50k hotspot, seed=42):
+Calibration note (tau_f x temperature scan, SIFT-50k hotspot, seed=42):
   - tau_f=0.75  ON: hot-cold gap -0.037 / OFF: -0.007 -- temperature amplifies
     f and causes over-maintenance (~25 reindexes) that hurts recall.
   - tau_f=1.00  ON: gap +0.062 / OFF: +0.010 -- temperature steers maintenance

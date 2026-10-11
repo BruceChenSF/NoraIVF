@@ -1,6 +1,6 @@
 #!/bin/bash
 # NoraIVF rebuttal experiment orchestrator v2 — full-coverage protocol + bounded deep
-cd /home/csf/projects/NoraIVF
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 RUN="experiments/run_claim_evidence_annbench.py"
 LEAN="Frozen DeDrift SPFresh NovaIVF AdaIVF"
@@ -8,7 +8,7 @@ FULL="Frozen Rebuild DeDrift SPFresh NovaIVF AdaIVF"
 LOG="--checkpoint-every 1 --log-dir results/logs"
 
 echo "[master2] start $(date)"
-# 备份有界窗口的旧结果
+# back up the previous bounded-window results
 for n in small sift_adaivf glove gist500k audioset deep; do
   [ -f results/claim_evidence_$n.json ] && cp results/claim_evidence_$n.json results/claim_evidence_${n}_bounded.json.bak
 done
@@ -47,7 +47,7 @@ OMP_NUM_THREADS=32 setsid nohup $PY $RUN --datasets audioset-unbal-128 \
   > results/exp_audioset_full.log 2>&1 < /dev/null &
 echo "[master2] B2 audioset-full pid $!"
 
-# Rebuild 量级探针：3 次重建直接量单次成本
+# Rebuild order-of-magnitude probe: 3 rebuilds, timing a single one directly
 OMP_NUM_THREADS=16 setsid nohup $PY $RUN \
   --datasets glove-100-angular audioset-unbal-128 \
   --n-init 300000 --n-stream 3000 --methods Rebuild \
@@ -56,7 +56,7 @@ OMP_NUM_THREADS=16 setsid nohup $PY $RUN \
 echo "[master2] B3 rebuild-probe pid $!"
 wait
 
-# ---------- Group C: deep (需要 --gt-scope indexed 已实现) ----------
+# ---------- Group C: deep (requires the --gt-scope indexed path) ----------
 OMP_NUM_THREADS=32 setsid nohup $PY $RUN --datasets deep-image-96-angular \
   --n-init 4950000 --n-stream 100000 --methods $LEAN --gt-scope indexed \
   --output results/claim_evidence_deep.json $LOG \

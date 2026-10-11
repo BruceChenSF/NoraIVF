@@ -1,6 +1,6 @@
 #!/bin/bash
 # DEEP-9.9M full-coverage multiseed (3 seeds x SPF/Nora/Ada), skip LIRE sweep.
-cd /home/csf/projects/NoraIVF
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 RB="experiments/run_claim_evidence_annbench.py"
 LOG="--checkpoint-every 1 --skip-lire-sweep --log-dir results/logs"

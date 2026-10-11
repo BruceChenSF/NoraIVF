@@ -1,9 +1,11 @@
 #!/bin/bash
-# run_dedrift_extra.sh - 为 DeDrift 补齐缺失的两组实验（延迟 + 多 seed）
-# 参数严格对齐既有运行：
-#   延迟：experiments/run_latency_scale.py，DEEP 用 200k 测量窗口（与 deep_raw.json 一致）
-#   多 seed：experiments/run_claim_evidence_annbench.py --seeds，DEEP 全覆盖
-cd /home/csf/projects/NoraIVF || exit 1
+# run_dedrift_extra.sh - fill in the two DeDrift groups that were missing
+# (latency and multi-seed)
+# Parameters are aligned exactly with the existing runs:
+#   latency: experiments/run_latency_scale.py; DEEP uses a 200k measurement window
+#            (matching deep_raw.json)
+#   multi-seed: experiments/run_claim_evidence_annbench.py --seeds; DEEP is full coverage
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 LAT=experiments/run_latency_scale.py
 MS=experiments/run_claim_evidence_annbench.py
@@ -16,7 +18,7 @@ STATE=results/dedrift_extra.state.tsv
 export OMP_NUM_THREADS=8
 SLOTS=${SLOTS:-4}
 
-# ---- 延迟任务: tag|dataset|n_init|n_stream|nlist ----
+# ---- latency jobs: tag|dataset|n_init|n_stream|nlist ----
 LT=(
 "mnist|mnist-784-euclidean|30093|29907|512"
 "fashion|fashion-mnist-784-euclidean|30093|29907|512"
@@ -26,7 +28,7 @@ LT=(
 "audioset|audioset-unbal-128|1021434|1020355|4096"
 "deep|deep-image-96-angular|4995000|200000|4096"
 )
-# ---- 多 seed 任务: dataset|n_init|n_stream|seed ----
+# ---- multi-seed jobs: dataset|n_init|n_stream|seed ----
 MT=(
 "deep-image-96-angular|4995000|4995000|42"
 "deep-image-96-angular|4995000|4995000|43"

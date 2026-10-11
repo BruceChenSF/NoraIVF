@@ -19,7 +19,7 @@ data fingerprints are recorded (rebuttal-experiments-plan.md §4).
 Usage::
 
     python scripts/prepare_annbench_datasets.py \
-        --source-dir /ssd1/csf/datasets/ann_benchmark \
+        --source-dir /path/to/ann_benchmark \
         --out-root data/annbench
 
     # convert a subset, overwrite existing outputs, no logging

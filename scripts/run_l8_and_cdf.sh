@@ -1,6 +1,6 @@
 #!/bin/bash
 # NoraIVF: L=8 sweep fill + raw-latency dumps for CDF coverage (7 datasets)
-cd /home/csf/projects/NoraIVF
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 RB="experiments/run_claim_evidence_annbench.py"
 LT="experiments/run_latency_scale.py"

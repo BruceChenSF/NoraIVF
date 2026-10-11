@@ -73,7 +73,7 @@ LAT_DATASETS = [
     ("AudioSet-2M", "audioset-unbal-128"),
 ]
 
-# DeDrift latency补跑 lives in a sibling directory and uses the full dataset
+# the DeDrift latency run lives in a sibling directory and uses the full dataset
 # name rather than the shorter ``latency_scale`` stem.
 # Transposed 2x3 block: two panel rows plus the column titles, the
 # one-row legend and the shared x label.

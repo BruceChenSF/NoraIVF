@@ -28,7 +28,9 @@ from experiments.run_claim_evidence_annbench import (
 from experiments.run_experiments import StreamSimulator, run_experiment
 
 
-HDF5_DIR = Path("/ssd1/csf/datasets/ann_benchmark")
+# Raw ann-benchmarks HDF5 files: point NORAIVF_ANNBENCH_HDF5 at wherever
+# they live, or use scripts/prepare_annbench_datasets.py to convert them.
+HDF5_DIR = Path(os.environ.get("NORAIVF_ANNBENCH_HDF5", "data/ann_benchmark"))
 DATA_DIR = _ROOT / "data"
 
 DATASETS = [

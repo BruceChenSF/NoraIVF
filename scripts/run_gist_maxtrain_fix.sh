@@ -1,13 +1,16 @@
 #!/bin/bash
 # run_gist_maxtrain_fix.sh
-# 修正 GIST 补跑：原脚本漏了 --max-train 500000，导致加载完整 1M 语料
-# （主实验用 500k 子集，见 scripts/master_run.sh:17）。受影响：
+# Fix the GIST re-run: the original script omitted --max-train 500000 and so
+# loaded the full 1M corpus
+# (the paper uses the 500k subset, see scripts/master_run.sh:17). Affected:
 #   results/multiseed_dedrift/gist-960-euclidean_seed{42,43,44}.json
 #   results/nlist_sweep_full/gist-960-euclidean_nlist{256,512,2048}.json
-# 说明：results/latency_scale_dedrift/gist-960-euclidean_dedrift.json **不需要修**
-#       —— 主延迟运行本身就用 n_train=1000000（全语料），两者口径一致。
-# 恢复正确配置的期望值（与主实验一致）：n_train=500000, n_init=n_stream=250000, coverage=1.0
-cd /home/csf/projects/NoraIVF || exit 1
+# Note: results/latency_scale_dedrift/gist-960-euclidean_dedrift.json does NOT need fixing
+#       -- the main latency run already used n_train=1000000 (full corpus), so the
+#       two agree.
+# Expected values for the corrected configuration, matching the paper:
+# n_train=500000, n_init=n_stream=250000, coverage=1.0
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 MS=experiments/run_claim_evidence_annbench.py
 MOUT=results/multiseed_dedrift
@@ -19,7 +22,7 @@ SLOTS=${SLOTS:-6}
 
 echo "[gist-fix] start $(date '+%F %T')"
 
-# ---- 1) 多 seed：GIST × 3 seeds（工作点 nlist=1024） ----
+# ---- 1) multi-seed: GIST x 3 seeds (operating point nlist=1024) ----
 for sd in 42 43 44; do
     f="$MOUT/gist-960-euclidean_seed${sd}.json"
     [ -f "$f" ] && mv "$f" "$BAD/" && echo "[gist-fix] backed up $(basename "$f")"
@@ -31,7 +34,7 @@ for sd in 42 43 44; do
     echo "[gist-fix] launch ms seed=$sd pid=$! $(date '+%T')"
 done
 
-# ---- 2) nlist 扫描：GIST 的 256 / 512 / 2048 三点 ----
+# ---- 2) nlist sweep: GIST at 256 / 512 / 2048 ----
 for nl in 256 512 2048; do
     f="$NOUT/gist-960-euclidean_nlist${nl}.json"
     [ -f "$f" ] && mv "$f" "$BAD/" && echo "[gist-fix] backed up $(basename "$f")"

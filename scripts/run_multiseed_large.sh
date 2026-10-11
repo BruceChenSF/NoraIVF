@@ -1,7 +1,7 @@
 #!/bin/bash
 # Multiseed stability across the full 7-dataset suite (3 seeds x SPF/Nora/Ada).
 # Seeds run in parallel; datasets sequential inside each seed job.
-cd /home/csf/projects/NoraIVF
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 PY=.venv/bin/python
 RB="experiments/run_claim_evidence_annbench.py"
 LOG="--checkpoint-every 1 --log-dir results/logs"

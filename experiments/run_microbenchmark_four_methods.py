@@ -37,7 +37,9 @@ ROOT = Path(__file__).resolve().parent.parent
 RESULT_DIR = ROOT / "results"
 FIGURE_DIR = ROOT / "figures"
 
-HDF5_DIR = Path("/ssd1/csf/datasets/ann_benchmark")
+# Raw ann-benchmarks HDF5 files: point NORAIVF_ANNBENCH_HDF5 at wherever
+# they live, or use scripts/prepare_annbench_datasets.py to convert them.
+HDF5_DIR = Path(os.environ.get("NORAIVF_ANNBENCH_HDF5", "data/ann_benchmark"))
 DATA_DIR = ROOT / "data"
 
 DATASETS = [

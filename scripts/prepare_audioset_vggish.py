@@ -47,7 +47,7 @@ Usage::
 
     python scripts/prepare_audioset_vggish.py --tar data/raw/features.tar.gz
     python scripts/prepare_audioset_vggish.py \\
-        --dir /ssd1/csf/datasets/audioset/audioset_v1_embeddings/unbal_train \\
+        --dir /path/to/audioset_v1_embeddings/unbal_train \\
         --name audioset-unbal-128
 
     # debug: stop after 100k segments, 50 queries, k=10
