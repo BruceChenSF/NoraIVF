@@ -15,6 +15,7 @@ from noraivf.core import (
     DeDriftIVF,
     SPFreshIVF,
     NovaIVF,
+    AdaIVF,
     create_index,
 )
 
@@ -25,6 +26,14 @@ from noraivf.datasets import (
     generate_embodied_dataset,
     compute_centroids,
     generate_boundary_queries,
+    list_datasets,
+)
+
+from noraivf.logging import (
+    ExperimentLogger,
+    summarize_run,
+    write_summary,
+    format_summary,
 )
 
 __all__ = [
@@ -37,6 +46,7 @@ __all__ = [
     "DeDriftIVF",
     "SPFreshIVF",
     "NovaIVF",
+    "AdaIVF",
     "create_index",
     "compute_l2_ground_truth",
     "load_ann_benchmark_hdf5",
@@ -44,4 +54,9 @@ __all__ = [
     "generate_embodied_dataset",
     "compute_centroids",
     "generate_boundary_queries",
+    "list_datasets",
+    "ExperimentLogger",
+    "summarize_run",
+    "write_summary",
+    "format_summary",
 ]

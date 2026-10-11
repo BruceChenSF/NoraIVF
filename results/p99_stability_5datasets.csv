@@ -1,0 +1,6 @@
+dataset,noraivf_ms,spfresh_ms,frozen_ms,adaivf_ms
+MNIST,5.966,5.419,4.891,4.109
+Fashion,4.732,3.970,4.389,4.690
+CoRE50,3.706,4.980,4.371,3.357
+ScanNetCLIP,2.556,2.501,2.974,3.383
+Ego4D,3.750,3.320,13.728,3.267

@@ -1,9 +1,13 @@
 """
-Run the Figure 10 insert/delete microbenchmark for three maintenance paths.
+Run the Figure 10 insert/delete microbenchmark for four maintenance paths.
 
 The experiment measures per-operation latency on five 30k Euclidean workloads:
-Frozen, LIRE, and Nora.  Results are saved as JSON/CSV and plotted as
+Frozen, LIRE, Nora, and AdaIVF.  Results are saved as JSON/CSV and plotted as
 dataset-mean P99 curves with min--max bands.
+
+NOTE: the file name says "four_methods" but predates its current method set;
+kept as-is for results/artifact compatibility.  Method list is now 4 entries
+(Frozen, LIRE, Nora, AdaIVF); update the name only if artifacts are migrated.
 """
 
 import csv
@@ -21,37 +25,48 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from noraivf.datasets import load_ann_benchmark_hdf5, load_npy_vector_dataset_l2
-from experiments.run_claim_evidence_annbench import L2FrozenIVF, L2NovaIVF, L2SPFreshIVF
+from experiments.run_claim_evidence_annbench import (
+    L2AdaIVF,
+    L2FrozenIVF,
+    L2NovaIVF,
+    L2SPFreshIVF,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULT_DIR = ROOT / "results"
 FIGURE_DIR = ROOT / "figures"
 
+HDF5_DIR = Path("/ssd1/csf/datasets/ann_benchmark")
+DATA_DIR = ROOT / "data"
+
 DATASETS = [
-    ("mnist-784-euclidean", Path("/Users/bruce/Downloads/mnist-784-euclidean.hdf5"), "hdf5"),
-    ("fashion-mnist-784-euclidean", Path("/Users/bruce/Downloads/fashion-mnist-784-euclidean.hdf5"), "hdf5"),
-    ("core50", ROOT / "data" / "core50", "npy"),
-    ("ScanNetCLIP", ROOT / "data" / "ScanNetCLIP", "npy"),
-    ("Ego4D", ROOT / "data" / "Ego4D", "npy"),
+    ("mnist-784-euclidean", HDF5_DIR / "mnist-784-euclidean.hdf5", "hdf5"),
+    ("fashion-mnist-784-euclidean", HDF5_DIR / "fashion-mnist-784-euclidean.hdf5", "hdf5"),
+    ("core50", DATA_DIR / "core50", "npy"),
+    ("ScanNetCLIP", DATA_DIR / "ScanNetCLIP", "npy"),
+    ("Ego4D", DATA_DIR / "Ego4D", "npy"),
 ]
 
 METHODS = [
     ("Frozen", L2FrozenIVF, {}),
     ("LIRE", L2SPFreshIVF, {"do_reassign": True, "L": 5}),
     ("Nora", L2NovaIVF, {"use_scdkm": True}),
+    ("AdaIVF", L2AdaIVF, {}),
 ]
 
 COLORS = {
     "Frozen": "#7f7f7f",
     "LIRE": "#1f77b4",
     "Nora": "#d62728",
+    "AdaIVF": "#2ca02c",
 }
 
 MARKERS = {
     "Frozen": "s",
     "LIRE": "o",
     "Nora": "^",
+    "AdaIVF": "D",
 }
 
 

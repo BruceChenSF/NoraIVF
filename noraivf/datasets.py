@@ -3,8 +3,41 @@ NovaIVF Experiment Suite — Datasets
 Generates synthetic data mimicking embodied AI vector search scenarios:
 spatial locality, distribution drift, and cluster imbalance.
 """
+import json
 import numpy as np
 import os
+from pathlib import Path
+
+
+def list_datasets(data_root="data/annbench"):
+    """Discover converted ann-benchmarks dataset dirs under ``data_root``.
+
+    Each entry has name, path, and any metadata from its meta.json
+    (shape, source digest, ...). Returns [] if nothing converted yet.
+    """
+    root = Path(data_root)
+    out = []
+    if not root.is_dir():
+        return out
+    for d in sorted(root.iterdir()):
+        if not (d / "train.npy").exists():
+            continue
+        entry = {"name": d.name, "path": str(d)}
+        meta_path = d / "meta.json"
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                meta = {}
+            entry["meta"] = meta
+            shape = meta.get("shape", {})
+            if "train" in shape:
+                entry["n_vectors"] = shape["train"][0]
+                entry["dim"] = shape["train"][1]
+            if "queries" in shape:
+                entry["n_queries"] = shape["queries"][0]
+        out.append(entry)
+    return out
 
 
 def compute_l2_ground_truth(train, queries, k=100, batch_size=256):

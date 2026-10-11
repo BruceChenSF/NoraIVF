@@ -1,0 +1,34 @@
+{
+  "restricted": {
+    "n": 15,
+    "size_mean": 400.0,
+    "per_split_median_s": 0.012490922585129738,
+    "per_split_mean_s": 0.013286030292510987,
+    "total_s": 0.1992904543876648
+  },
+  "topl": {
+    "n": 15,
+    "size_mean": 404.2,
+    "per_split_median_s": 0.03786709997802973,
+    "per_split_mean_s": 0.03921944883962472,
+    "total_s": 0.5882917325943708
+  },
+  "fullk": {
+    "n": 15,
+    "size_mean": 404.1333333333333,
+    "per_split_median_s": 12.407632566057146,
+    "per_split_mean_s": 12.917958381772042,
+    "total_s": 193.76937572658062
+  },
+  "restricted_eq_fullk": false,
+  "fullk_vec": {
+    "n": 15,
+    "size_mean": 404.1333333333333,
+    "per_split_median_s": 0.22950407769531012,
+    "per_split_mean_s": 0.24940336893002193,
+    "total_s": 3.741050533950329
+  },
+  "vec_speedup_vs_fullk": 54.06279788426911,
+  "_ref_spfresh_per_split_s": 0.8989510261249033,
+  "_ref_novaivf_per_split_s": 0.008247468606011117
+}

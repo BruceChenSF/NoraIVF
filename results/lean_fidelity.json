@@ -1,0 +1,11 @@
+{
+  "reference": {
+    "label": "reference",
+    "k": 1483,
+    "n": 200000,
+    "n_splits": 459,
+    "n_merges": 0,
+    "n_reassigns": 0,
+    "total_split_time": 6.663757491856813,
+    "total_scdkm_time": 6.033252262510359,
+    "sizes": 

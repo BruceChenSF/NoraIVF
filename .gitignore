@@ -1,20 +1,53 @@
+# ---------------------------------------------------------------------------
+# NoraIVF
+# ---------------------------------------------------------------------------
+
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
 build/
+.venv/
+venv/
+.pytest_cache/
 
-# OS files
+# OS / editor
 .DS_Store
 Thumbs.db
+*.swp
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Virtual environments
-venv/
-.venv/
+# ---------------------------------------------------------------------------
+# Experiment output.
+#
+# A new run writes into results/, and those files stay untracked by default so
+# a run cannot be committed by accident.  The JSON/CSV that the paper's tables
+# and figures read ARE tracked -- they were added explicitly with `git add -f`
+# and are listed in README under "Results in this repository".  Adding a file
+# there means `git add -f <path>`.
+# ---------------------------------------------------------------------------
+results/**
+log/
 
-# Large data files
+# Raw datasets.  See README, "Preparing Data", for the conversion steps.
 data/
+
+# Local scratch: script backups, archives, ad-hoc dumps.
+*.bak
+*.bak_*
+*.tgz
+*.tar.gz
+
+# ---------------------------------------------------------------------------
+# CONFIDENTIAL -- must never be published.
+#
+# The review text for the paper under submission and the rebuttal plan are
+# internal documents.  They have never been part of a published commit and the
+# entries below exist so that they cannot be added by accident.
+# ---------------------------------------------------------------------------
+审稿意见.md
+审稿*.md
+rebuttal-*.md

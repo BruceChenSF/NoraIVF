@@ -1,0 +1,4 @@
+dataset,L,method,family,reassignments,maintenance_time_s,npa_violation_rate,recall_at_nprobe
+sift-128-euclidean,0,SPFresh-L0,LIRE,0,31.600876739248633,,0.51084
+sift-128-euclidean,1,SPFresh-L1,LIRE,75139,633.3154419651255,,0.51568
+sift-128-euclidean,5,SPFresh-L5,LIRE,146128,1415.9433771972544,,0.52145

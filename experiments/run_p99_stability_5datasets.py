@@ -19,40 +19,48 @@ from pathlib import Path
 import numpy as np
 
 from noraivf.datasets import load_ann_benchmark_hdf5, load_npy_vector_dataset_l2
-from experiments.run_claim_evidence_annbench import L2FrozenIVF, L2NovaIVF, L2SPFreshIVF
+from experiments.run_claim_evidence_annbench import (
+    L2AdaIVF,
+    L2FrozenIVF,
+    L2NovaIVF,
+    L2SPFreshIVF,
+)
 from experiments.run_experiments import StreamSimulator, run_experiment
 
+
+HDF5_DIR = Path("/ssd1/csf/datasets/ann_benchmark")
+DATA_DIR = _ROOT / "data"
 
 DATASETS = [
     {
         "name": "mnist-784-euclidean",
         "label": "MNIST",
         "format": "hdf5",
-        "path": "/Users/bruce/Downloads/mnist-784-euclidean.hdf5",
+        "path": HDF5_DIR / "mnist-784-euclidean.hdf5",
     },
     {
         "name": "fashion-mnist-784-euclidean",
         "label": "Fashion",
         "format": "hdf5",
-        "path": "/Users/bruce/Downloads/fashion-mnist-784-euclidean.hdf5",
+        "path": HDF5_DIR / "fashion-mnist-784-euclidean.hdf5",
     },
     {
         "name": "core50",
         "label": "CoRE50",
         "format": "npy",
-        "path": "data/core50",
+        "path": DATA_DIR / "core50",
     },
     {
         "name": "ScanNetCLIP",
         "label": "ScanNetCLIP",
         "format": "npy",
-        "path": "data/ScanNetCLIP",
+        "path": DATA_DIR / "ScanNetCLIP",
     },
     {
         "name": "Ego4D",
         "label": "Ego4D",
         "format": "npy",
-        "path": "data/Ego4D",
+        "path": DATA_DIR / "Ego4D",
     },
 ]
 
@@ -60,6 +68,7 @@ METHODS = [
     ("NoraIVF", L2NovaIVF, {"use_scdkm": True}),
     ("SPFresh", L2SPFreshIVF, {}),
     ("Frozen", L2FrozenIVF, {}),
+    ("AdaIVF", L2AdaIVF, {}),
 ]
 
 
@@ -147,7 +156,7 @@ def write_outputs(results: dict, json_path: Path, csv_path: Path) -> None:
     json_path.write_text(json.dumps(results, indent=2) + "\n")
     with csv_path.open("w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["dataset", "noraivf_ms", "spfresh_ms", "frozen_ms"])
+        writer.writerow(["dataset", "noraivf_ms", "spfresh_ms", "frozen_ms", "adaivf_ms"])
         for row in results["rows"]:
             writer.writerow(
                 [
@@ -155,6 +164,7 @@ def write_outputs(results: dict, json_path: Path, csv_path: Path) -> None:
                     f"{row['NoraIVF']['p99_ms']:.3f}",
                     f"{row['SPFresh']['p99_ms']:.3f}",
                     f"{row['Frozen']['p99_ms']:.3f}",
+                    f"{row['AdaIVF']['p99_ms']:.3f}",
                 ]
             )
 

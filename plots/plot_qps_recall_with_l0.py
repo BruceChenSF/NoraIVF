@@ -17,6 +17,8 @@ DATASET_ORDER = [
     "core50",
     "ScanNetCLIP",
     "Ego4D",
+    "sift-128-euclidean",
+    "gist-960-euclidean",
 ]
 
 DATASET_LABELS = {
@@ -25,6 +27,8 @@ DATASET_LABELS = {
     "core50": "CoRE50",
     "ScanNetCLIP": "ScanNet",
     "Ego4D": "Ego4D",
+    "sift-128-euclidean": "SIFT-1M",
+    "gist-960-euclidean": "GIST-1M",
 }
 
 METHOD_SPECS = [
@@ -53,9 +57,14 @@ def method_result(dataset_result: dict, method: str) -> dict:
 
 def collect_rows(results: dict) -> list[dict]:
     rows = []
-    for dataset in DATASET_ORDER:
+    for dataset in _ordered_datasets(results):
         dataset_result = results[dataset]
         for method, label, *_ in METHOD_SPECS:
+            if method == "SPFresh-L0":
+                if method not in dataset_result.get("lire_l_sweep", {}):
+                    continue
+            elif method not in dataset_result.get("methods", {}):
+                continue
             result = method_result(dataset_result, method)
             frontier = result["frontier"]
             for nprobe, recall, qps in zip(frontier["nprobe"], frontier["recall"], frontier["qps"]):
@@ -72,6 +81,14 @@ def collect_rows(results: dict) -> list[dict]:
     return rows
 
 
+def _ordered_datasets(results: dict) -> list[str]:
+    """Datasets present in the results, in DATASET_ORDER preference order."""
+    present = list(results.keys())
+    ordered = [d for d in DATASET_ORDER if d in present]
+    ordered.extend(d for d in present if d not in DATASET_ORDER)
+    return ordered
+
+
 def write_csv(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
@@ -81,6 +98,7 @@ def write_csv(rows: list[dict], path: Path) -> None:
 
 
 def plot(results: dict, output_pdf: Path, output_png: Path | None) -> None:
+    datasets = _ordered_datasets(results)
     plt.rcParams.update(
         {
             "font.family": "serif",
@@ -95,12 +113,19 @@ def plot(results: dict, output_pdf: Path, output_png: Path | None) -> None:
         }
     )
 
-    fig, axes = plt.subplots(1, 5, figsize=(10.0, 2.25), sharey=False)
+    fig, axes = plt.subplots(1, len(datasets), figsize=(2.0 * len(datasets), 2.25), sharey=False)
+    if len(datasets) == 1:
+        axes = [axes]
     legend_handles = []
     legend_labels = []
-    for ax, dataset in zip(axes, DATASET_ORDER):
+    for ax, dataset in zip(axes, datasets):
         dataset_result = results[dataset]
         for method, label, color, marker, linestyle in METHOD_SPECS:
+            if method == "SPFresh-L0":
+                if method not in dataset_result.get("lire_l_sweep", {}):
+                    continue
+            elif method not in dataset_result.get("methods", {}):
+                continue
             result = method_result(dataset_result, method)
             frontier = result["frontier"]
             line, = ax.plot(
@@ -113,10 +138,10 @@ def plot(results: dict, output_pdf: Path, output_png: Path | None) -> None:
                 markersize=3.5,
                 label=label,
             )
-            if dataset == DATASET_ORDER[0]:
+            if dataset == datasets[0]:
                 legend_handles.append(line)
                 legend_labels.append(label)
-        ax.set_title(DATASET_LABELS[dataset], pad=2)
+        ax.set_title(DATASET_LABELS.get(dataset, dataset), pad=2)
         ax.set_xlabel("Recall")
         ax.grid(True, linewidth=0.35, alpha=0.35)
         ax.set_xlim(left=max(0.3, ax.get_xlim()[0]), right=1.01)

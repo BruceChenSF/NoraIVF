@@ -7,9 +7,9 @@ scipy>=1.10
 tqdm>=4.65
 h5py>=3.10
 
-# Data preparation (only needed if re-downloading/preparing datasets)
-torch>=2.0
-torchvision>=0.15
+# Data preparation (ann-benchmarks HDF5 download + synthetic generation only)
+# NOTE: torch/torchvision intentionally removed — this machine has NO GPU and we do
+# not run GPU-dependent pipelines (ResNet18 image encoding is deferred).
 Pillow>=9.0
 huggingface-hub>=0.16
 pyarrow>=12.0

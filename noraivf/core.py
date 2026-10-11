@@ -772,6 +772,532 @@ class DeDriftIVF(IVFIndex):
 
 
 # ────────────────────────────────────────────────────────────────
+# AdaIVF: incremental maintenance port of arXiv:2411.00970 (Ada-IVF)
+# ────────────────────────────────────────────────────────────────
+class AdaIVF(IVFIndex):
+    """Ada-IVF incremental index maintenance (arXiv:2411.00970, Algorithm 4).
+
+    Per-partition metadata: temperature T (init 1.0, floor 1.0), running
+    centroid mu (incremental update), initial-centroid snapshot mu0 (drift
+    anchor), and size s.  A PAM (id -> cluster) is kept so deletes are O(1)
+    (the paper uses PAM to support deletions; the base-class linear scan is
+    too slow and unfair as a baseline).
+
+    Violation detection runs every ``check_every`` update ops, vectorized:
+        f(c) = alpha * T(c) * ( beta * f_s(c) + (1-beta) * f_d(c) )
+    with f_s the bidirectional relative size deviation and f_d the centroid
+    drift ||mu - mu0|| / ||mu0||.  Partitions with f > tau_f are violators.
+    The paper tunes tau_f by workload/load; the default here (0.75) targets
+    the no-query streaming phase (T=1, f = 0.5*f_s + 0.5*f_d): naturally
+    sized clusters (0.25x..2.5x tau_s, normal drift) stay below 0.75 and
+    only genuinely unbalanced partitions trigger.  For query-bearing loads
+    (hotspot workloads) the temperature multiplies f, so the working point
+    is tau_f ~= 1.0: on SIFT-50k (smoke, seed=42) tau_f=1.0 gives
+    hot-cold recall gap +0.062 vs +0.010 with temperature ablated, while
+    0.75 with temperature ON over-maintains (gap -0.037 vs -0.007 OFF).
+    A global indicator G (size-std + reconstruction-error deviation) guards
+    against global drift and triggers a full k-means rebuild when G > tau_g
+    (default tau_g=5.0).  The paper does not specify a value (it is workload
+    dependent); 5.0 is deliberately loose so the safety valve fires only in
+    genuinely pathological global drift, not during normal streaming.
+
+    Local reindex (Algorithm 4): violator partitions (and, if oversized,
+    their kmeans split centroids) enter candidate pool M, all their points
+    enter reclustering pool X, and their slots are released; the r_c nearest
+    index centroids to M also join M/X with released slots; warm-started
+    Lloyd iterations (iota=5) partition X using M as init; over-allocated
+    candidate pools are trimmed before Lloyd, and after Lloyd every pool
+    partition is balanced up to >= max(2, int(0.75*tau_s)) points; new partitions
+    are written back into the released
+    slots (appending when the pool grows).
+
+    Documented deviations from the paper:
+      * the paper uses balanced k-means for the pool; we approximate it with
+        warm-started Lloyd + a post-Lloyd balancing pass (_balance) that forces
+        every pool partition to >= max(2, int(0.75*tau_s)) points by moving the most
+        similar points from the largest surplus partitions into under-size ones,
+        plus a pre-Lloyd pool trim that drops candidate centroids the data
+        cannot sustain (cheaper than a true balanced k-means, same spirit),
+        with inner-product (cosine) assignment on unit-normalized vectors.
+      * the paper fixes tau_s=1000 for its nlist regime; here the default is
+        the equilibrium average partition size, max(8, int(round(n_init/nlist))),
+        so a balanced partition sits at f_s ~ 0 and only real size deviation
+        (over- or under-sized clusters) flags a violator.  The old default of
+        2*n_init/nlist made f_s ~ 1.0 at equilibrium (every cluster a violator,
+        degenerating to repeated full rebuilds).  Experiments may override it.
+      * temperature is driven by queries: probed partitions heat as
+        T *= (1 + eta*sim_nearest/sim_c) (factor clamped to [1, 2] to keep
+        the per-query heating bounded), unprobed ones cool as
+        T = max(T*(1-nu), 1.0).  If the streaming phase issues no queries,
+        T stays 1.0 and detection degrades to pure size+drift, which is a
+        reasonable degradation (the paper's temperature needs a query stream).
+
+      * ablation switch ``use_temperature``: with False, ``search()`` skips
+        the query-driven temperature updates entirely, so T stays exactly
+        1.0 for the whole run and violation detection degenerates to pure
+        size+drift (``f = alpha*(beta*f_s + (1-beta)*f_d)``).  This isolates
+        the contribution of the temperature mechanism (query-locality
+        amplification) from the rest of Algorithm 4; experiments that do not
+        exercise query locality keep the default True.
+
+    Data is L2-normalized internally (``normalize=True``) so inner product
+    equals cosine similarity and the per-partition reconstruction error
+    reduces to eps_c = 1 - ||mu_c||^2 (exact for unit vectors).  With
+    ``normalize=False`` (raw-Euclidean workloads, see L2AdaIVF in the
+    ann-benchmarks runner) the aggregate formulas remain exact because we
+    maintain per-partition vector sums a_c and squared-norm sums q_c, giving
+    eps_c = q_c/s_c - ||mu_c||^2 for arbitrary data.
+
+    Maintenance time is charged to ``total_split_time`` so
+    ``cumul_maintenance_time`` reports it automatically.  Extra statistics
+    for experiment reporting live in ``ada_stats``.
+    """
+
+    def __init__(self, data, nlist, normalize=True, tau_s=None, alpha=1.0,
+                 beta=0.5, tau_f=0.75, r_c=25, iota=5, check_every=100,
+                 gamma=0.5, tau_g=5.0, eta=0.1, nu=0.01, seed=42,
+                 use_temperature=True):
+        # use_temperature=False: ablation — search() skips temperature
+        # updates, T stays 1.0, detection reduces to pure size+drift.
+        self.use_temperature = bool(use_temperature)
+        self.normalize = bool(normalize)
+        data = np.asarray(data, dtype=np.float32)
+        if self.normalize:
+            norms = np.linalg.norm(data, axis=1, keepdims=True)
+            norms[norms == 0.0] = 1.0
+            data = data / norms
+        super().__init__(data, nlist, seed=seed)
+
+        n_init = len(data)
+        self.tau_s = tau_s if tau_s is not None else max(8, int(round(n_init / nlist)))
+        self.alpha = float(alpha)
+        self.beta = float(beta)
+        self.tau_f = float(tau_f)
+        self.r_c = int(r_c)
+        self.iota = int(iota)
+        self.check_every = int(check_every)
+        self.gamma = float(gamma)
+        self.tau_g = float(tau_g)
+        self.eta = float(eta)
+        self.nu = float(nu)
+
+        # Per-partition metadata: temperature, drift anchor, sums.
+        self.T = np.ones(self.k, dtype=np.float64)
+        self.mu0 = self.centroids.copy()
+        self.a_c = np.zeros((self.k, self.d), dtype=np.float32)
+        self.q_c = np.zeros(self.k, dtype=np.float64)
+        for c in range(self.k):
+            pl = self.posting_lists[c]
+            if pl:
+                vecs = np.array([self.id_to_vec[i] for i in pl], dtype=np.float32)
+                self.a_c[c] = vecs.sum(axis=0)
+                self.q_c[c] = float(np.sum(vecs * vecs))
+
+        # PAM: id -> cluster for O(1) delete lookup.
+        self.pam = {}
+        for c in range(self.k):
+            for i in self.posting_lists[c]:
+                self.pam[i] = c
+
+        self.ops_since_check = 0
+        self.n0 = n_init
+        sizes = np.array([len(pl) for pl in self.posting_lists], dtype=np.float64)
+        self.sigma0 = float(sizes.std())
+        self.eps0 = float(self._mean_recon_error())
+
+        self.ada_stats = {
+            "n_violations": 0,
+            "n_local_reindex": 0,
+            "n_global_rebuild": 0,
+            "n_points_reclustered": 0,
+        }
+
+    # ------------------------------------------------------------------
+    # similarity hook: inner product by default; overridden by L2 wrapper
+    # ------------------------------------------------------------------
+    def _similarity_matrix(self, A, B):
+        """Pairwise similarity between rows of A and rows of B (inner product)."""
+        return A @ B.T
+
+    def _mean_recon_error(self):
+        """Mean reconstruction error over non-empty partitions.
+
+        eps_c = q_c/s_c - ||mu_c||^2 is the exact mean squared error of the
+        partition's points around its centroid; for unit-normalized vectors
+        q_c == s_c so it reduces to 1 - ||mu_c||^2.
+        """
+        sizes = np.array([len(pl) for pl in self.posting_lists[:self.k]], dtype=np.float64)
+        nz = sizes > 0
+        if not np.any(nz):
+            return 0.0
+        mu_norms = np.linalg.norm(self.centroids[:self.k], axis=1) ** 2
+        eps = self.q_c[:self.k] / np.maximum(sizes, 1.0) - mu_norms
+        return float(eps[nz].mean())
+
+    def _find_cluster(self, vid):
+        """O(1) PAM lookup (the paper uses PAM to support deletes)."""
+        return self.pam.get(vid)
+
+    def insert(self, vec):
+        vec = np.asarray(vec, dtype=np.float32)
+        if self.normalize:
+            n = np.linalg.norm(vec)
+            if n > 0.0:
+                vec = vec / n
+        return super().insert(vec)
+
+    def _post_insert(self, c, i, vec):
+        # Running-mean centroid update, incremental: the paper's
+        # mu_new = mu + (s_delta/s_new)*(v - mu) with s_delta = +1 is
+        # algebraically identical to maintaining the exact sum a_c and
+        # deriving mu = a_c/s (no full recompute, no fp drift).
+        self.a_c[c] += vec
+        self.q_c[c] += float(np.dot(vec, vec))
+        s_new = len(self.posting_lists[c])
+        self.centroids[c] = self.a_c[c] / s_new
+        self.pam[i] = c
+        self._count_op()
+
+    def _post_delete(self, c, i, vec):
+        # s_delta = -1 in the paper's running-mean formula.
+        self.a_c[c] -= vec
+        self.q_c[c] -= float(np.dot(vec, vec))
+        s_new = len(self.posting_lists[c])
+        if s_new > 0:
+            self.centroids[c] = self.a_c[c] / s_new
+        else:
+            self.centroids[c] = np.zeros(self.d, dtype=np.float32)
+            self.a_c[c] = np.zeros(self.d, dtype=np.float32)
+            self.q_c[c] = 0.0
+        self.pam.pop(i, None)
+        self._count_op()
+
+    def _count_op(self):
+        self.ops_since_check += 1
+        if self.ops_since_check >= self.check_every:
+            self.ops_since_check = 0
+            self._run_checks()
+
+    # ------------------------------------------------------------------
+    # violation detection (vectorized over all partitions)
+    # ------------------------------------------------------------------
+    def _detect_violators(self):
+        """f(c) = alpha*T*(beta*f_s + (1-beta)*f_d); returns violator indices.
+
+        Two safeguards against pathological triggers from empty/tiny partitions:
+          * size == 0 partitions never participate (the paper deletes empty
+            partitions; under the slot layout we simply leave them inert).
+          * the under-size denominator is clamped to max(s, tau_s/2.0) so f_s
+            is bounded by 2.0. The paper's formula (tau_s - s)/max(s, 1.0) is
+            unbounded (an empty slot scores tau_s, a 2-point micro-cluster
+            scores tau_s/2) and makes micro partitions re-trigger every check;
+            structural imbalance is instead handled by the balanced local
+            reindex (_balance), not by unbounded scores.
+        """
+        k = self.k
+        sizes = np.array([len(pl) for pl in self.posting_lists[:k]], dtype=np.float64)
+        T = self.T[:k]
+        tau_s = float(self.tau_s)
+        nonempty = sizes > 0
+        f_s = np.zeros(k, dtype=np.float64)
+        # over-size: f_s = (s - tau_s)/tau_s (unbounded, as in the paper)
+        over = nonempty & (sizes >= tau_s)
+        f_s[over] = (sizes[over] - tau_s) / tau_s
+        # under-size: denominator clamped to max(s, tau_s/2) -> f_s <= 2.0
+        under = nonempty & ~over
+        f_s[under] = (tau_s - sizes[under]) / np.maximum(sizes[under], tau_s / 2.0)
+        mu = self.centroids[:k]
+        mu0 = self.mu0[:k]
+        mu0_norm = np.linalg.norm(mu0, axis=1)
+        f_d = np.linalg.norm(mu - mu0, axis=1) / np.maximum(mu0_norm, 1e-8)
+        f = self.alpha * T * (self.beta * f_s + (1.0 - self.beta) * f_d)
+        return np.where(nonempty & (f > self.tau_f))[0]
+
+    def _global_indicator(self):
+        """G = gamma*|sigma-sigma0|/sigma0 + (1-gamma)*|eps-eps'|/eps'."""
+        k = self.k
+        sizes = np.array([len(pl) for pl in self.posting_lists[:k]], dtype=np.float64)
+        sigma = float(sizes.std())
+        eps = self._mean_recon_error()
+        eps_prime = self.eps0 * (self.n0 / max(self.n, 1)) ** (1.0 / self.d)
+        G = (self.gamma * abs(sigma - self.sigma0) / max(self.sigma0, 1e-8)
+             + (1.0 - self.gamma) * abs(eps - eps_prime) / max(eps_prime, 1e-8))
+        return G
+
+    def _run_checks(self):
+        violators = self._detect_violators()
+        self.ada_stats["n_violations"] += int(len(violators))
+        G = self._global_indicator()
+        if G > self.tau_g:
+            self._global_rebuild()
+        elif len(violators) > 0:
+            self._local_reindex(violators)
+
+    # ------------------------------------------------------------------
+    # global rebuild (safety valve)
+    # ------------------------------------------------------------------
+    def _global_rebuild(self):
+        """Full k-means rebuild over all live vectors (G > tau_g fallback)."""
+        t0 = time.perf_counter()
+        live_ids = list(self.id_to_vec.keys())
+        if len(live_ids) < self.k * 2:
+            return
+        vecs = np.array([self.id_to_vec[i] for i in live_ids], dtype=np.float32)
+        centroids, assigns = kmeans_faiss(vecs, self.k, niter=25, seed=self.seed)
+        self.centroids = centroids
+        self.posting_lists = [[] for _ in range(self.k)]
+        self.a_c = np.zeros((self.k, self.d), dtype=np.float32)
+        self.q_c = np.zeros(self.k, dtype=np.float64)
+        self.pam = {}
+        for i, a in zip(live_ids, assigns):
+            self.posting_lists[a].append(i)
+            self.pam[i] = int(a)
+        for c in range(self.k):
+            pl = self.posting_lists[c]
+            if pl:
+                vecs_c = np.array([self.id_to_vec[i] for i in pl], dtype=np.float32)
+                self.a_c[c] = vecs_c.sum(axis=0)
+                self.q_c[c] = float(np.sum(vecs_c * vecs_c))
+                self.centroids[c] = self.a_c[c] / len(pl)
+            else:
+                self.centroids[c] = np.zeros(self.d, dtype=np.float32)
+        self.mu0 = self.centroids.copy()
+        self.T = np.ones(self.k, dtype=np.float64)
+        sizes = np.array([len(pl) for pl in self.posting_lists], dtype=np.float64)
+        self.sigma0 = float(sizes.std())
+        self.n0 = len(live_ids)
+        self.eps0 = float(self._mean_recon_error())
+        self.n_splits += 1
+        self.ada_stats["n_global_rebuild"] += 1
+        self.total_split_time += time.perf_counter() - t0
+
+    # ------------------------------------------------------------------
+    # local reindex (Algorithm 4)
+    # ------------------------------------------------------------------
+    def _lloyd(self, X_vecs, init_centroids, n_iter):
+        """Warm-started Lloyd iterations with inner-product assignment."""
+        ctrs = init_centroids.astype(np.float32).copy()
+        n = len(ctrs)
+        for _ in range(n_iter):
+            sims = self._similarity_matrix(X_vecs, ctrs)
+            assigns = np.argmax(sims, axis=1)
+            a_new = np.zeros_like(ctrs)
+            np.add.at(a_new, assigns, X_vecs)
+            counts = np.bincount(assigns, minlength=n).astype(np.float64)
+            nz = counts > 0
+            new_ctrs = np.zeros_like(ctrs)
+            new_ctrs[nz] = a_new[nz] / counts[nz, None]
+            new_ctrs[~nz] = ctrs[~nz]  # empty clusters keep previous centroid
+            ctrs = new_ctrs
+        assigns = np.argmax(self._similarity_matrix(X_vecs, ctrs), axis=1)
+        return ctrs, assigns
+
+    def _balance(self, assigns, X_vecs, ctrs, min_size):
+        """Force every pool partition to >= min_size points (true balancing).
+
+        Repeatedly takes points from the largest surplus partition and moves
+        the ones most similar to an under-size partition's centroid into it
+        (empty partitions are filled this way too, superseding the old
+        _repair_empty which only stuffed 2 points into empties).  Donors are
+        never drained below min_size, so every move strictly reduces the
+        total deficit and the loop terminates.  If the pool holds fewer than
+        min_size * n_partitions points the pool cannot sustain the floor and
+        we return early (deficit stays; caller's centroid recompute is
+        unaffected).  Affected centroids are recomputed by the caller from
+        the returned assigns, per the existing write-back logic.
+        """
+        n_new = len(ctrs)
+        counts = np.bincount(assigns, minlength=n_new).astype(np.int64)
+        if counts.sum() < min_size * n_new:
+            return assigns  # pool too small to balance every partition
+        for recipient in np.where(counts < min_size)[0]:
+            need = int(min_size - counts[recipient])
+            while need > 0:
+                surplus = counts - min_size
+                donors = np.where(surplus > 0)[0]
+                if len(donors) == 0:
+                    break
+                donor = int(donors[np.argmax(counts[donors])])
+                give = min(need, int(counts[donor] - min_size))
+                donor_pts = np.where(assigns == donor)[0]
+                sims = self._similarity_matrix(X_vecs[donor_pts], ctrs[recipient:recipient + 1]).ravel()
+                take = donor_pts[np.argsort(-sims)[:give]]
+                assigns[take] = recipient
+                counts[donor] -= give
+                counts[recipient] += give
+                need -= give
+        return assigns
+
+    def _local_reindex(self, violators):
+        """Recluster the pool X around candidate centroids M (Algorithm 4)."""
+        t0 = time.perf_counter()
+        d = self.d
+        violators = [int(c) for c in violators]
+        released = set()
+        M = []          # candidate centroids
+        X = []          # point ids to recluster
+        n_splits_this = 0
+
+        # (a) violators: split oversized partitions, else centroid joins pool
+        for c in violators:
+            indices = [i for i in self.posting_lists[c] if i in self.id_to_vec]
+            s = len(indices)
+            if s == 0:
+                # Fix 4: an empty violator contributes a zero centroid that can
+                # attract no points, i.e. a guaranteed dead partition after the
+                # pool Lloyd; skip it and leave the slot inert.
+                continue
+            released.add(c)
+            if s > self.tau_s:
+                k_c = max(2, min(int(np.ceil(s / self.tau_s)), s))
+                vecs = np.array([self.id_to_vec[i] for i in indices], dtype=np.float32)
+                ctrs, _ = kmeans_faiss(vecs, k_c, niter=10, seed=self.rng.randint(0, 2**31))
+                for row in ctrs:
+                    M.append(np.asarray(row, dtype=np.float32))
+                n_splits_this += 1
+            else:
+                M.append(self.centroids[c].copy())
+            X.extend(indices)
+
+        # (b) KNN expansion: nearest r_c partitions to each pool centroid
+        remaining = [c for c in range(self.k) if c not in released]
+        if remaining:
+            rem_ctrs = self.centroids[remaining]
+            sims = self._similarity_matrix(np.asarray(M, dtype=np.float32), rem_ctrs)
+            r = min(self.r_c, len(remaining))
+            top = np.argsort(-sims, axis=1)[:, :r]
+            neighbor_slots = set()
+            for row in top:
+                for ridx in row:
+                    neighbor_slots.add(remaining[ridx])
+            for c in neighbor_slots:
+                indices = [i for i in self.posting_lists[c] if i in self.id_to_vec]
+                X.extend(indices)
+                M.append(self.centroids[c].copy())
+                released.add(c)
+
+        X = list(dict.fromkeys(X))  # dedupe (defensive; slots are disjoint)
+        n_pool = len(X)
+        min_size = max(2, int(0.75 * self.tau_s))
+
+        # (c) pool over-allocation trim, warm-started Lloyd, balanced refine
+        if n_pool > 0:
+            X_vecs = np.array([self.id_to_vec[i] for i in X], dtype=np.float32)
+            pool_ctrs = np.asarray(M, dtype=np.float32)
+            # Fix 3: when the candidate pool has more centroids than the pool
+            # points can sustain (n_pool // min_size), pre-scan assignments and
+            # keep only the highest-mass candidates (pool-level merge: the
+            # balanced k-means behavior of adapting the partition count to the
+            # data). Dead centroids that attract no points are dropped too.
+            max_candidates = max(1, n_pool // min_size)
+            if len(pool_ctrs) > max_candidates:
+                init_sims = self._similarity_matrix(X_vecs, pool_ctrs)
+                init_assigns = np.argmax(init_sims, axis=1)
+                mass = np.bincount(init_assigns, minlength=len(pool_ctrs))
+                alive = np.where(mass > 0)[0]
+                if len(alive) > max_candidates:
+                    alive = alive[np.argsort(-mass[alive])[:max_candidates]]
+                pool_ctrs = pool_ctrs[alive]
+            ctrs, assigns = self._lloyd(X_vecs, pool_ctrs, self.iota)
+            assigns = self._balance(assigns, X_vecs, ctrs, min_size)
+            a_new = np.zeros((len(pool_ctrs), d), dtype=np.float32)
+            np.add.at(a_new, assigns, X_vecs)
+            counts = np.bincount(assigns, minlength=len(pool_ctrs)).astype(np.float64)
+            ctrs_final = np.zeros((len(pool_ctrs), d), dtype=np.float32)
+            nz = counts > 0
+            ctrs_final[nz] = a_new[nz] / counts[nz, None]
+            q_new = np.zeros(len(pool_ctrs), dtype=np.float64)
+            np.add.at(q_new, assigns, np.sum(X_vecs * X_vecs, axis=1))
+        else:
+            X_vecs = np.zeros((0, d), dtype=np.float32)
+            pool_ctrs = np.asarray(M, dtype=np.float32)
+            ctrs_final = pool_ctrs.copy()
+            a_new = ctrs_final.copy()
+            q_new = np.zeros(len(pool_ctrs), dtype=np.float64)
+            assigns = np.zeros(0, dtype=np.int64)
+
+        # (e) write back into released slots (append when the pool grew)
+        n_new = len(ctrs_final)
+        slot_ids = sorted(released)
+        while len(slot_ids) < n_new:
+            slot_ids.append(self.k)
+            self.posting_lists.append([])
+            self.centroids = np.vstack([self.centroids, np.zeros((1, d), dtype=np.float32)])
+            self.mu0 = np.vstack([self.mu0, np.zeros((1, d), dtype=np.float32)])
+            self.a_c = np.vstack([self.a_c, np.zeros((1, d), dtype=np.float32)])
+            self.q_c = np.append(self.q_c, 0.0)
+            self.T = np.append(self.T, 1.0)
+            self.k += 1
+
+        old_cluster = np.array([self.pam.get(i, -1) for i in X], dtype=np.int64)
+        for j, c in enumerate(slot_ids):
+            if j < n_new:
+                idxs = [X[t] for t in np.where(assigns == j)[0]] if n_pool > 0 else []
+                self.posting_lists[c] = idxs
+                self.centroids[c] = ctrs_final[j]
+                self.mu0[c] = ctrs_final[j].copy()
+                self.a_c[c] = a_new[j]
+                self.q_c[c] = float(q_new[j])
+                self.T[c] = 1.0
+            else:
+                self.posting_lists[c] = []
+                self.centroids[c] = np.zeros(d, dtype=np.float32)
+                self.mu0[c] = np.zeros(d, dtype=np.float32)
+                self.a_c[c] = np.zeros(d, dtype=np.float32)
+                self.q_c[c] = 0.0
+                self.T[c] = 1.0
+
+        # refresh PAM for pool points; count reassignments (SPFresh-aligned)
+        if n_pool > 0:
+            new_cluster = np.array([slot_ids[a] for a in assigns], dtype=np.int64)
+            for i, nc in zip(X, new_cluster):
+                self.pam[i] = int(nc)
+            self.n_reassigns += int(np.sum(new_cluster != old_cluster))
+
+        self.n_splits += n_splits_this
+        self.ada_stats["n_local_reindex"] += 1
+        self.ada_stats["n_points_reclustered"] += n_pool
+        self.total_split_time += time.perf_counter() - t0
+
+    # ------------------------------------------------------------------
+    # temperature updates driven by queries
+    # ------------------------------------------------------------------
+    def search(self, query, k=100, nprobe=8):
+        """Search and update partition temperatures.
+
+        With ``use_temperature=False`` the temperature update is skipped, so
+        T stays 1.0 and detection degenerates to pure size+drift.
+        """
+        query = np.asarray(query, dtype=np.float32)
+        if self.normalize:
+            n = np.linalg.norm(query)
+            if n > 0.0:
+                query = query / n
+        sims = np.dot(query, self.centroids[:self.k].T)
+        candidates = np.argsort(-sims)[:min(nprobe, self.k)]
+        result = super().search(query, k=k, nprobe=nprobe)
+        if self.use_temperature:
+            self._update_temperature(sims, candidates)
+        return result
+
+    def _update_temperature(self, sims, candidates):
+        """Heat probed partitions, cool the rest (T floor 1.0)."""
+        k = self.k
+        if len(candidates) == 0:
+            return
+        sim_nearest = float(sims[candidates[0]])
+        sel_sims = sims[candidates]
+        ratio = np.ones(len(candidates), dtype=np.float64)
+        pos = sel_sims > 0.0
+        ratio[pos] = sim_nearest / sel_sims[pos]
+        factor = np.clip(1.0 + self.eta * ratio, 1.0, 2.0)
+        self.T[candidates] *= factor
+        unsel = np.ones(k, dtype=bool)
+        unsel[candidates] = False
+        self.T[unsel] = np.maximum(self.T[unsel] * (1.0 - self.nu), 1.0)
+
+
+# ────────────────────────────────────────────────────────────────
 # Factory
 # ────────────────────────────────────────────────────────────────
 def create_index(name, data, nlist, **kwargs):
@@ -787,6 +1313,8 @@ def create_index(name, data, nlist, **kwargs):
         return DeDriftIVF(data, nlist, **kwargs)
     elif name in ("spfresh",):
         return SPFreshIVF(data, nlist, **kwargs)
+    elif name in ("adaivf",):
+        return AdaIVF(data, nlist, **kwargs)
     elif name in ("novaivf",):
         seed = kwargs.pop("seed", 42)
         return NovaIVF(data, nlist, seed=seed, use_scdkm=True, **kwargs)

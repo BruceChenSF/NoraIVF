@@ -1,0 +1,277 @@
+{
+  "gist-960-euclidean": {
+    "dataset": "gist-960-euclidean",
+    "metric": "euclidean",
+    "format": "npy",
+    "gt_scope": "full",
+    "coverage_fraction": 1.0,
+    "n_train": 500000,
+    "n_queries": 1000,
+    "nlist": 1024,
+    "n_init": 250000,
+    "n_stream": 250000,
+    "k": 100,
+    "seed": 43,
+    "methods": {
+      "DeDrift": {
+        "n_splits": 2500,
+        "n_merges": 0,
+        "n_reassigns": 0,
+        "maintenance_time_s": 138.16172333341092,
+        "split_clustering_time_s": 0.0,
+        "split_reassign_time_s": 0.0,
+        "scdkm_time_s": 0.0,
+        "ada_stats": null,
+        "npa": {
+          "checked": 500000,
+          "violations": 144677,
+          "violation_rate": 0.289354
+        },
+        "frontier": {
+          "nprobe": [
+            1,
+            2,
+            4,
+            8,
+            16,
+            32,
+            64
+          ],
+          "recall": [
+            0.11737,
+            0.19754,
+            0.30416000000000004,
+            0.44079,
+            0.59074,
+            0.7465,
+            0.87525
+          ],
+          "qps": [
+            276.8292676462531,
+            199.22302650688258,
+            128.3563839311736,
+            76.45805012330503,
+            42.48444186565939,
+            22.598619243757526,
+            11.557955509120069
+          ],
+          "p50_ms": [
+            3.582972101867199,
+            4.98464098200202,
+            7.7306414023041725,
+            12.983563356101513,
+            23.363816551864147,
+            43.86690352112055,
+            85.28945175930858
+          ],
+          "p99_ms": [
+            4.7126588225364685,
+            6.35076031088829,
+            9.32947856374085,
+            15.711957402527332,
+            27.323742238804698,
+            51.36063300073147,
+            100.59948568232358
+          ]
+        }
+      }
+    },
+    "lire_l_sweep": {},
+    "maintenance_budget": {
+      "0.15": {
+        "budget_hours": 0.15,
+        "budget_s": 540.0,
+        "eligible": [
+          "DeDrift"
+        ],
+        "by_recall": {
+          "0.3": {
+            "method": "DeDrift",
+            "qps": 128.3563839311736,
+            "qps_by_method": {
+              "DeDrift": 128.3563839311736
+            }
+          },
+          "0.5": {
+            "method": "DeDrift",
+            "qps": 42.48444186565939,
+            "qps_by_method": {
+              "DeDrift": 42.48444186565939
+            }
+          },
+          "0.7": {
+            "method": "DeDrift",
+            "qps": 22.598619243757526,
+            "qps_by_method": {
+              "DeDrift": 22.598619243757526
+            }
+          },
+          "0.9": {
+            "method": null,
+            "qps": null,
+            "qps_by_method": {}
+          }
+        }
+      },
+      "0.3": {
+        "budget_hours": 0.3,
+        "budget_s": 1080.0,
+        "eligible": [
+          "DeDrift"
+        ],
+        "by_recall": {
+          "0.3": {
+            "method": "DeDrift",
+            "qps": 128.3563839311736,
+            "qps_by_method": {
+              "DeDrift": 128.3563839311736
+            }
+          },
+          "0.5": {
+            "method": "DeDrift",
+            "qps": 42.48444186565939,
+            "qps_by_method": {
+              "DeDrift": 42.48444186565939
+            }
+          },
+          "0.7": {
+            "method": "DeDrift",
+            "qps": 22.598619243757526,
+            "qps_by_method": {
+              "DeDrift": 22.598619243757526
+            }
+          },
+          "0.9": {
+            "method": null,
+            "qps": null,
+            "qps_by_method": {}
+          }
+        }
+      },
+      "1.0": {
+        "budget_hours": 1.0,
+        "budget_s": 3600.0,
+        "eligible": [
+          "DeDrift"
+        ],
+        "by_recall": {
+          "0.3": {
+            "method": "DeDrift",
+            "qps": 128.3563839311736,
+            "qps_by_method": {
+              "DeDrift": 128.3563839311736
+            }
+          },
+          "0.5": {
+            "method": "DeDrift",
+            "qps": 42.48444186565939,
+            "qps_by_method": {
+              "DeDrift": 42.48444186565939
+            }
+          },
+          "0.7": {
+            "method": "DeDrift",
+            "qps": 22.598619243757526,
+            "qps_by_method": {
+              "DeDrift": 22.598619243757526
+            }
+          },
+          "0.9": {
+            "method": null,
+            "qps": null,
+            "qps_by_method": {}
+          }
+        }
+      },
+      "3.0": {
+        "budget_hours": 3.0,
+        "budget_s": 10800.0,
+        "eligible": [
+          "DeDrift"
+        ],
+        "by_recall": {
+          "0.3": {
+            "method": "DeDrift",
+            "qps": 128.3563839311736,
+            "qps_by_method": {
+              "DeDrift": 128.3563839311736
+            }
+          },
+          "0.5": {
+            "method": "DeDrift",
+            "qps": 42.48444186565939,
+            "qps_by_method": {
+              "DeDrift": 42.48444186565939
+            }
+          },
+          "0.7": {
+            "method": "DeDrift",
+            "qps": 22.598619243757526,
+            "qps_by_method": {
+              "DeDrift": 22.598619243757526
+            }
+          },
+          "0.9": {
+            "method": null,
+            "qps": null,
+            "qps_by_method": {}
+          }
+        }
+      },
+      "8.0": {
+        "budget_hours": 8.0,
+        "budget_s": 28800.0,
+        "eligible": [
+          "DeDrift"
+        ],
+        "by_recall": {
+          "0.3": {
+            "method": "DeDrift",
+            "qps": 128.3563839311736,
+            "qps_by_method": {
+              "DeDrift": 128.3563839311736
+            }
+          },
+          "0.5": {
+            "method": "DeDrift",
+            "qps": 42.48444186565939,
+            "qps_by_method": {
+              "DeDrift": 42.48444186565939
+            }
+          },
+          "0.7": {
+            "method": "DeDrift",
+            "qps": 22.598619243757526,
+            "qps_by_method": {
+              "DeDrift": 22.598619243757526
+            }
+          },
+          "0.9": {
+            "method": null,
+            "qps": null,
+            "qps_by_method": {}
+          }
+        }
+      }
+    },
+    "microbenchmark": {},
+    "mixed_workload": {
+      "DeDrift": {
+        "rounds": 12,
+        "updates": 3000,
+        "deletes": 300,
+        "insert_p50_us": 1145.712099969387,
+        "insert_p99_us": 6182.4356764503,
+        "delete_p50_us": 37519.44191753864,
+        "delete_p99_us": 48795.28877325355,
+        "query_p50_ms": 10.126878041774035,
+        "query_p99_ms": 16.72771193087101,
+        "recall_mean": 0.4578666666666667,
+        "recall_hot": 0.0,
+        "recall_cold": 0.0,
+        "hot_query_fraction": 0.0,
+        "qps": 95.94680765343439
+      }
+    }
+  }
+}
